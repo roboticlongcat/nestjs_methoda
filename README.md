@@ -96,9 +96,6 @@ JWT — **stateless**, то есть сервер не хранит информ
   docker run --name postgres-lab -e POSTGRES_USER=lab -e POSTGRES_PASSWORD=lab -e POSTGRES_DB=lab -p 5432:5432 -d postgres:15
   docker run --name redis-jwt -p 6379:6379 -d redis:7-alpine
   ```
-
-> 💡 Redis слушает порт `6379`, PostgreSQL — `5432`. Учётные данные: `lab/lab`.
-
 ---
 
 ## 5. Создание проекта NestJS
@@ -115,9 +112,6 @@ cd auth-lab
 npm install @nestjs/typeorm typeorm pg redis ioredis bcryptjs class-validator class-transformer
 npm install -D @types/bcryptjs
 ```
-
-> ⚠️ **bcryptjs** мы **не используем для хэширования** (по условию!), но устанавливаем, чтобы не ломать TypeORM-валидацию. Пароли храним в открытом виде (только для учебного проекта!).
-
 ---
 
 ## 6. Настройка PostgreSQL и TypeORM
@@ -140,7 +134,7 @@ import { AppService } from './app.service';
       password: 'lab',
       database: 'lab',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // ⚠️ только для dev!
+      synchronize: true, 
     }),
   ],
   controllers: [AppController],
@@ -152,8 +146,6 @@ export class AppModule {}
 ---
 
 ## 7. Реализация сущностей User и Request
-
-> Смотри: `src/user/entities/user.entity.ts` и `src/request/entities/request.entity.ts` (ты уже прислала их — просто скопируй в проект).
 
 Запуск миграции через `synchronize: true` — TypeORM сам создаст таблицы при старте.
 
@@ -198,7 +190,7 @@ export class AuthController {
 }
 ```
 
-### Шаг 4: AuthService (без bcrypt!)
+### Шаг 4: AuthService
 
 ```ts
 // auth.service.ts
@@ -301,9 +293,6 @@ create(@Body() dto: CreateRequestDto, @Req() req) {
   });
 }
 ```
-
-> Можно создать декоратор `@CurrentUser()`, но для простоты используем `req.user`.
-
 ---
 
 ## 11. Настройка Swagger с securityDefinitions
@@ -341,8 +330,6 @@ bootstrap();
 Теперь в Swagger UI (http://localhost:3000/api):
 - Нажми **Authorize** → введи `Bearer <ваш_токен>`
 - Защищённые эндпоинты станут видны
-
-> ❗ Swagger **не проверяет куки**, поэтому мы имитируем авторизацию через заголовок — хотя сервер на самом деле проверяет JWT в этом же заголовке.
 
 ---
 
