@@ -109,8 +109,7 @@ cd auth-lab
 Установим зависимости:
 
 ```bash
-npm install @nestjs/typeorm typeorm pg redis ioredis bcryptjs class-validator class-transformer
-npm install -D @types/bcryptjs
+npm install @nestjs/typeorm typeorm pg ioredis
 ```
 ---
 
@@ -146,6 +145,72 @@ export class AppModule {}
 ---
 
 ## 7. Реализация сущностей User и Request
+
+`src/user/entities/user.entity.ts`:
+```ts
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Request } from '../../request/entities/request.entity';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  password: string;
+
+  @Column({ nullable: true })
+  name: string;
+
+  @Column({ default: 'user' })
+  role: 'user' | 'moderator';
+
+  @OneToMany(() => Request, (request) => request.author)
+  requests: Request[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+`src/request/entities/request.entity.ts`:
+```ts
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from '../../user/entities/user.entity';
+
+@Entity('requests')
+export class Request {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  title: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ default: 'pending' })
+  status: 'pending' | 'approved' | 'rejected';
+
+  @Column()
+  authorId: number;
+
+  @ManyToOne(() => User, (user) => user.requests)
+  @JoinColumn({ name: 'authorId' })
+  author: User;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
 
 Запуск миграции через `synchronize: true` — TypeORM сам создаст таблицы при старте.
 
