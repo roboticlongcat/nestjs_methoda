@@ -109,7 +109,7 @@ cd auth-lab
 Установим зависимости:
 
 ```bash
-npm install @nestjs/typeorm typeorm pg ioredis @nestjs/swagger
+npm install @nestjs/typeorm typeorm pg ioredis @nestjs/swagger @nestjs/jwt
 ```
 ---
 
