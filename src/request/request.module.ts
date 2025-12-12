@@ -13,7 +13,7 @@ import { UserModule } from 'src/user/user.module';
       secret: process.env.JWT_SECRET || 'secret',
       signOptions: { expiresIn: '1h' },
     }), 
-    RedisModule, // ← чтобы был доступен REDIS_CLIENT
+    RedisModule,
     UserModule
   ],
   controllers: [RequestController],
