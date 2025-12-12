@@ -253,6 +253,7 @@ export class RequestService {
 Добавим логику сервиса, чтобы проверять существование пользователя в БД:
 
 `src/user/user.service.ts`:
+```ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -277,7 +278,7 @@ export class UserService {
     return this.repo.findOne({ where: { email } });
   }
 }
-
+```
 Для возможности экспорта модуля UserService:
 
 `user.module.ts`:
