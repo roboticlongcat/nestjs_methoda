@@ -774,7 +774,7 @@ export class AppController {
 <img width="402" height="1328" alt="image" src="https://github.com/user-attachments/assets/46fdf1fc-dffe-4475-ad1c-c57a9466a426" />
 
 ## Тестирование
-### 1. Swagger
+## 1. Swagger
 Зайдем на `http://localhost:3000/api` и посмотрим, что записалось в сваггере:
 
 
@@ -783,7 +783,7 @@ export class AppController {
   <img width="1291" height="611" alt="image" src="https://github.com/user-attachments/assets/faedeed4-935e-48fc-a741-1e75036d14b5" />
 - Готово! Теперь можно тестировать методы, требующие авторизации :)
 
-# Регистрация - `http://localhost:3000/auth/register`
+### Регистрация - `http://localhost:3000/auth/register`
 Структура тела запроса:
 ```json
 {
@@ -802,7 +802,7 @@ export class AppController {
 "password":"123",
 }
 ```
-### 2. Postman
+## 2. Postman
 Залогинимся, предварительно открыв вкладку Сеть:
 <img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/697b1cef-a7ee-4b38-9e27-bb6dbe3baee7" />
 В Set-Cookie лежит заветная кука. Сохраните куку и используйте ее в следующих методах. Не потеряй ее и не сломай, как говорится.
@@ -831,7 +831,7 @@ export class AppController {
 
 Попробуем сделать что-нибудь и увидим 401 - наша кука больше не действительна.
 <img width="1359" height="926" alt="image" src="https://github.com/user-attachments/assets/73abc5fe-55bf-48bd-8b66-02def9818d3e" />
-### 3. Handlebars через браузер
+## 3. Handlebars через браузер
 Залогинимся на странице `http://localhost:3000/login`:
 <img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/2bc7bef3-ac2e-4919-9476-9da2079aa16e" />
 После успешной авторизации страничка вернет нам json с нашими данными. Затем зайдем на страницу профиля `http://localhost:3000/profile` и увидим все о пользователе.
