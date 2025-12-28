@@ -852,10 +852,6 @@ export class AppController {
   ✅ Ролевую модель и автоматическое заполнение authorId.
 
 ### Полезные ссылки
-    NestJS Docs — Controllers
-    Sequelize + NestJS
-    OWASP: Session Management  
-    Express Session Best Practices
 
 - [NestJS Docs](https://docs.nestjs.com/](https://insayt.github.io/nestjs.ru.com/guide/first-steps.html)) — документация NestJS на русском
 - [OWASP: Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html?spm=a2ty_o01.29997173.0.0.65865171acRHgt)
