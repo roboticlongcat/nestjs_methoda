@@ -1,74 +1,82 @@
 # Методические указания по выполнению лабораторной работы №4  
-## Аутентификация и авторизация в NestJS с использованием JWT, Redis и ролевой модели
+## NestJS (TS, Nest, Handlebars, Sequelize, куки)
 
-В этой лабораторной работе вы реализуете бэкенд-часть веб-приложения на **NestJS**, которая поддерживает:
-- **Регистрацию и аутентификацию через JWT** (JSON Web Token),
-- **Ролевую модель**: `user` и `moderator`,
-- **Автоматическое привязывание пользователя к его заявкам**,
-- **Хранение активных/отозванных токенов в Redis**,
-- **Swagger-документацию с разграничением доступа**.
-
-
-## Содержание
-
-1. [Чем отличается аутентификация от авторизации?](#1-Чем-отличается-аутентификация-от-авторизации)
-2. [JWT: теория и принцип работы](#2-JWT-теория-и-принцип-работы)
-3. [Зачем нужен Redis при использовании JWT?](#3-Зачем-нужен-Redis-при-использовании-JWT)
-4. [Подготовка окружения](#4-Подготовка-окружения)
-5. [Создание проекта NestJS](#5-Создание-проекта-NestJS)
-6. [Настройка PostgreSQL и TypeORM](#6-Настройка-PostgreSQL-и-TypeORM)
-7. [Реализация сущностей User и Request](#7-Реализация-сущностей-user-и-request)
-8. [JWT-аутентификация: сервис, контроллер, guards](#8-JWT-аутентификация-сервис-контроллер-guards)
-9. [Автоматическое заполнение автора заявки](#9-Автоматическое-заполнение-автора-заявки)
-10. [Настройка Swagger с securityDefinitions](#10-Настройка-Swagger-с-securityDefinitions)
-11. [Тестирование через Postman](#11-Тестирование-через-Postman)
-12. [Заключение и полезные ссылки](#12-Заключение-и-полезные-ссылки)
+- **Регистрацию и аутентификацию через куки (сессии)**,  
+- **Ролевую модель**: `user` и `moderator`,  
+- **Автоматическое привязывание пользователя к его заявкам**,  
+- **Хранение активных сессий в Redis**,  
+- **HTML-демонстрацию через Handlebars**,  
+- **Swagger-документацию для тестирования JSON API**.
 
 ---
 
-## 1. Чем отличается аутентификация от авторизации?
+# Содержание
 
-- **Аутентификация** — подтверждение личности: «Кто ты?».  
+- [Чем отличается аутентификация от авторизации?](#чем-отличается-аутентификация-от-авторизации)
+- [Куки и сессии: теория и принцип работы](#куки-и-сессии-теория-и-принцип-работы)
+- [Зачем нужен Redis при использовании сессий?](#зачем-нужен-redis-при-использовании-сессий)
+- [Подготовка окружения](#подготовка-окружения)
+- [Создание проекта NestJS](#создание-проекта-nestjs)
+- [Настройка Sequelize и Handlebars](#настройка-sequelize-и-handlebars)
+- [Реализация моделей User и Request](#реализация-моделей-user-и-request)
+- [Аутентификация: сервис, контроллер, guards](#аутентификация-сервис-контроллер-guards)
+- [Guard для защиты маршрутов](#guard-для-защиты-маршрутов)
+- [Контроллеры](#контроллеры)
+- [Шаблоны Handlebars](#шаблоны-handlebars)
+- [Настройка Swagger](#настройка-swagger)
+- [Тестирование](#тестирование)
+- [Итоги](#итоги)
+- [Полезные ссылки](#полезные-ссылки)
+  
+---
+
+## Чем отличается аутентификация от авторизации?
+
+- **Аутентификация** — подтверждение личности: *«Кто ты?»*  
   Пример: ввод email и пароля → сервер проверяет их в БД.
 
-- **Авторизация** — проверка прав: «Что ты можешь?».  
+- **Авторизация** — проверка прав: *«Что ты можешь?»*  
   Пример: пользователь с ролью `user` может редактировать только свои заявки, а `moderator` — все.
 
 ---
 
-## 2. JWT: теория и принцип работы
+## Куки и сессии: теория и принцип работы
 
-**JWT (JSON Web Token)** — это строка вида `header.payload.signature`, где:
-- `header` — алгоритм подписи (например, `HS256`);
-- `payload` — полезные данные (например, `{ sub: 1, email: "user@example.com", role: "user" }`);
-- `signature` — подпись, вычисленная на основе header + payload + секретного ключа.
+В отличие от JWT, **сессионная аутентификация — stateful**: сервер хранит информацию о сессии (обычно в Redis или БД).
 
-📌 JWT **не шифрует данные**, а **подписывает** их. Любой может прочитать payload, но **подделать токен без секретного ключа невозможно**.
+**Как это работает**:
 
-👉 В нашем случае:
-- При `/auth/login` сервер генерирует JWT и отдаёт его клиенту.
-- Клиент при каждом запросе шлёт заголовок:  
-  `Authorization: Bearer <токен>`
-- Сервер проверяет подпись и извлекает данные о пользователе.
+1. При `/api/auth/login` сервер проверяет email/пароль.  
+2. Если данные верны — создаёт запись в Redis:  
+   ```text
+   session:abc123 → userId=1
+   ```
+3. Устанавливает куку:  
+  ```http
+  Set-Cookie: sessionId=abc123; HttpOnly; Secure; SameSite=Lax
+  ```
+4. Браузер автоматически отправляет эту куку при каждом запросе.
+5. Сервер читает sessionId, ищет сессию в Redis → если найдена, пользователь авторизован.
 
----
+>🔑 Кука с флагом HttpOnly недоступна из JavaScript → защита от XSS.
 
-## 3. Зачем нужен Redis при использовании JWT?
-
-JWT — **stateless**, то есть сервер не хранит информацию о токене.  
-Но тогда **как отозвать токен при logout?**
-
-Решение: хранить **отозванные токены в Redis** с TTL = времени жизни JWT.
-
-> Пример:  
-> - JWT живёт 1 час.  
-> - При logout — записываем токен в Redis с TTL=3600 сек.  
-> - При каждом запросе — проверяем: есть ли токен в blacklist?  
-> → Если да — **отказываем в доступе**, даже если подпись валидна.
+>💡 При logout сессия удаляется из Redis → мгновенная деавторизация.
 
 ---
 
-## 4. Подготовка окружения
+## Зачем нужен Redis при использовании сессий?
+
+Сессии должны храниться внешне (не в памяти процесса), чтобы:
+
+  - Работать в кластере (несколько экземпляров NestJS),  
+  - Сохранять сессии после перезапуска сервера,  
+  - Быстро проверять/удалять сессии.
+
+Redis — идеальное решение: быстрое, простое, надёжное.
+
+---
+
+## Подготовка окружения
 
 Убедитесь, что установлены:
 
@@ -95,187 +103,192 @@ JWT — **stateless**, то есть сервер не хранит информ
   ```
 ---
 
-## 5. Создание проекта NestJS
+## Создание проекта NestJS
 
 ```bash
-nest new auth-lab
+nest new cookie-lab
 # выберите npm как менеджер
-cd auth-lab
+cd cookie-lab
 ```
 
 Установим зависимости:
 
 ```bash
-npm install @nestjs/typeorm typeorm pg ioredis @nestjs/swagger @nestjs/jwt
+npm install @nestjs/sequelize sequelize pg pg-hstore ioredis cookie-parser
+npm install -D @types/express @types/cookie-parser
 ```
 ---
 
-## 6. Настройка PostgreSQL и TypeORM
+## Настройка Sequalize и Handlebars
 
-В `app.module.ts`:
+В `main.ts` пропишем пути к папке с файлами handlebars и настроим сваггер:
 
 ```ts
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
-@Module({
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'lab',
-      password: 'lab',
-      database: 'lab',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, 
-    }),
-  ],
-  controllers: [AppController],
-  providers: [AppService],
-})
-export class AppModule {}
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  app.use(cookieParser());
+
+  app.setBaseViewsDir(join(__dirname, '..', 'views'));
+  app.setViewEngine('hbs');
+
+  const config = new DocumentBuilder()
+  .setTitle('Lab4 API')
+  .setDescription('Сессионная аутентификация. После login скопируйте sessionId из Set-Cookie и вставьте в Authorize → Cookie.')
+  .addCookieAuth('sessionId')
+  .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  await app.listen(3000);
+}
+bootstrap();
 ```
-Запуск миграции через `synchronize: true` — TypeORM сам создаст таблицы при старте.
 ---
 
-## 7. Реализация сущностей User и Request 
+## Реализация моделей User и Request 
 
-Реализуем сущности заявки и пользователя, чтобы протестировать работу нашего сервиса с авторизацией.
+Реализуем модели заявки и пользователя, чтобы протестировать работу нашего сервиса с авторизацией.
 
-`src/user/entities/user.entity.ts`:
+`src/user/user.model.ts`:
 ```ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { Request } from '../../request/entities/request.entity';
+import { Column, Model, Table, HasMany } from 'sequelize-typescript';
+import { Request } from '../request/request.model';
 
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
+@Table({ tableName: 'users' })
+export class User extends Model {
+  @Column({ primaryKey: true, autoIncrement: true })
+  declare id: number;
 
-  @Column({ unique: true })
-  email: string;
+  @Column({ unique: true, allowNull: false })
+  declare email: string;
 
-  @Column()
-  password: string;
+  @Column({ allowNull: false })
+  declare password: string;
 
-  @Column({ nullable: true })
-  name: string;
+  @Column
+  declare name: string;
 
-  @Column({ default: 'user' })
-  role: 'user' | 'moderator';
+  @Column({ defaultValue: 'user' })
+  declare role: 'user' | 'moderator';
 
-  @OneToMany(() => Request, (request) => request.author)
-  requests: Request[];
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
+  @HasMany(() => Request)
+  declare requests: Request[];
 }
 ```
-`src/request/entities/request.entity.ts`:
+`src/request/request.model.ts`:
 ```ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from '../../user/entities/user.entity';
+import { Column, Model, Table, ForeignKey } from 'sequelize-typescript';
+import { User } from '../user/user.model';
 
-@Entity('requests')
-export class Request {
-  @PrimaryGeneratedColumn()
-  id: number;
+@Table({ tableName: 'requests' })
+export class Request extends Model {
+  @Column({ primaryKey: true, autoIncrement: true })
+  declare id: number;
 
-  @Column()
+  @Column
+  declare title: string;
+
+  @Column
+  declare description: string;
+
+  @Column({ defaultValue: 'pending' })
+  declare status: 'pending' | 'approved' | 'rejected';
+
+  @ForeignKey(() => User)
+  @Column
+  declare authorId: number;
+}
+```
+Создадим шаблон для создания заявки:
+`src/request/dto/create-request.dto.ts`:
+```ts
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CreateRequestDto {
+  @ApiProperty({ example: 'Заявка на мемчик' })
   title: string;
 
-  @Column({ nullable: true })
-  description: string;
-
-  @Column({ default: 'pending' })
-  status: 'pending' | 'approved' | 'rejected';
-
-  @Column()
-  authorId: number;
-
-  @ManyToOne(() => User, (user) => user.requests)
-  @JoinColumn({ name: 'authorId' })
-  author: User;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
+  @ApiProperty({ example: 'Хочу мемчик', required: false })
+  description?: string;
 }
 ```
-Пока напишем сервис для заявок с typeorm:
+Напишем сервис для заявок:
 ```ts
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Request } from './entities/request.entity';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/sequelize';
+import { Request } from './request.model';
 
 @Injectable()
 export class RequestService {
   constructor(
-    @InjectRepository(Request)
-    private repo: Repository<Request>,
+    @InjectModel(Request)
+    private requestModel: typeof Request,
   ) {}
 
-  create(dto: any) {
-    return this.repo.save(dto);
+  /* Создать заявку */
+  async create(createDto: any, authorId: number) {
+    return this.requestModel.create({
+      ...createDto,
+      authorId,
+    });
   }
 
-  findAll() {
-    return this.repo.find();
+  /* Получить ВСЕ заявки пользователя */
+  async findAllByAuthor(authorId: number) {
+    return this.requestModel.findAll({ where: { authorId } });
   }
 
-  findAllByAuthor(authorId: number) {
-    return this.repo.find({ where: { authorId } });
+  /* Получить все заявки */
+  async findAll() {
+    return this.requestModel.findAll();
   }
 
-  findOne(id: number) {
-    return this.repo.findOne({ where: { id } });
+  /* Найти одну заявку по ID */
+  async findById(id: number) {
+    return this.requestModel.findByPk(id);
   }
 
-  remove(id: number) {
-    return this.repo.delete(id);
-  }
-
-  update(id: number, dto: any) {
-    return this.repo.update(id, dto);
+  /* Проверить, принадлежит ли заявка пользователю */
+  async isOwner(requestId: number, userId: number): Promise<boolean> {
+    const request = await this.requestModel.findByPk(requestId);
+    return !!request && request.authorId === userId;
   }
 }
 ```
-
-Добавим логику сервиса, чтобы проверять существование пользователя в БД:
+Добавим логику сервиса пользователей:
 
 `src/user/user.service.ts`:
 ```ts
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { InjectModel } from '@nestjs/sequelize';
+import { User } from './user.model';
 
 @Injectable()
 export class UserService {
   constructor(
-    @InjectRepository(User)
-    private repo: Repository<User>,
+    @InjectModel(User)
+    private userModel: typeof User, 
   ) {}
 
-  create(data: Partial<User>) {
-    return this.repo.save(data);
+  async create(userData: Partial<User>): Promise<User> {
+    return this.userModel.create(userData as any);
   }
 
-  findOne(id: number) {
-    return this.repo.findOne({ where: { id } });
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userModel.findOne({ where: { email } });
   }
 
-  findByEmail(email: string) {
-    return this.repo.findOne({ where: { email } });
+  async findById(id: number): Promise<User | null> {
+    return this.userModel.findByPk(id);
   }
 }
 ```
@@ -284,12 +297,14 @@ export class UserService {
 `user.module.ts`:
 ```ts
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { User } from './user.model';
 import { UserService } from './user.service';
-import { User } from './entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User])],
+  imports: [
+    SequelizeModule.forFeature([User]), 
+  ],
   providers: [UserService],
   exports: [UserService],
 })
@@ -298,53 +313,124 @@ export class UserModule {}
 
 ---
 
-## 8. JWT-аутентификация: сервис, контроллер, guards
+## Аутентификация: сервис, контроллер, guard
+В этой реализации используется сессионная аутентификация через куки. Сервер хранит активные сессии в Redis, а клиент получает куку sessionId.
 
-### Шаг 1: Инициирование модуля auth
+### SessionService - для работы с сессиями
 
-```bash
-nest g module auth
-nest g controller auth
-nest g service auth
-```
-
-### Шаг 2: RedisModule
-
-Добавим модуль, запускающий работу клиента Redis, к которому мы будем обращаться в AuthModule.
+`src/session/session.service.ts`:
 
 ```ts
-import { Global, Module } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
-@Global() // ← глобальный, чтобы инжектить везде без импорта
-@Module({
-  providers: [
-    {
-      provide: 'REDIS_CLIENT',
-      useFactory: (): Redis => {
-    const client = new Redis({ // инициируем подключение
+@Injectable()
+export class SessionService {
+  private readonly redis: Redis;
+
+  constructor() {
+    this.redis = new Redis({
       host: 'localhost',
       port: 6379,
     });
-    client.on('error', (err) => {
-      console.error('Redis connection error:', err.message);
+    this.redis.on('error', (err) => {
+      console.error('Redis SessionStore error:', err);
     });
+  }
 
-    return client;
-  },
-    },
-  ],
-  exports: ['REDIS_CLIENT'],
+  /**
+   * Создаёт сессию в Redis
+   * @param sessionId — уникальный ID сессии
+   * @param userId — ID пользователя
+   * @param ttlSec — время жизни в секундах (по умолчанию 1 час)
+   */
+  async create(sessionId: string, userId: number, ttlSec: number = 3600): Promise<void> {
+    await this.redis.setex(`session:${sessionId}`, ttlSec, String(userId));
+  }
+
+  /* Получает ID пользователя по sessionId */
+  async getUserId(sessionId: string): Promise<number | null> {
+    const userIdStr = await this.redis.get(`session:${sessionId}`);
+    return userIdStr ? parseInt(userIdStr, 10) : null;
+  }
+
+  /* Удаляет сессию (logout)*/
+  async destroy(sessionId: string): Promise<void> {
+    await this.redis.del(`session:${sessionId}`);
+  }
+
+  /* Проверяет, существует ли сессия */
+  async exists(sessionId: string): Promise<boolean> {
+    const exists = await this.redis.exists(`session:${sessionId}`);
+    return exists === 1;
+  }
 }
-)
-
-export class RedisModule {}
 ```
+Пропишем модуль для возможности интеграции в модуль Auth.
+`src/session/session.service.ts`:
+```ts
+import { Module, Global } from '@nestjs/common';
+import { SessionService } from './session.service';
 
-### Шаг 3: JwtAuthGuard
+@Global()
+@Module({
+  providers: [SessionService],
+  exports: [SessionService],
+})
+export class SessionModule {}
+```
+Добавим написанную логику в AuthService:
+`src/auth/auth.service.ts`:
+```ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { UserService } from '../user/user.service';
+import { SessionService } from '../session/session.service';
+import { v4 as uuidv4 } from 'uuid';
 
-Напишем отдельный guard для проверки подписей ( своего рода защитник нашего веб-сервиса :) )
-`src/auth/guards/jwt-auth.guard.ts`:
+@Injectable()
+export class AuthService {
+  constructor(
+    private userService: UserService,
+    private sessionService: SessionService,
+  ) {}
+
+  async register(email: string, password: string, name?: string) {
+    const existing = await this.userService.findByEmail(email);
+    if (existing) throw new Error('User already exists');
+    return this.userService.create({ email, password, name, role: 'user' });
+  }
+
+  async login(email: string, password: string) {
+    const user = await this.userService.findByEmail(email);
+    if (!user || user.password !== password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const sessionId = uuidv4();
+    await this.sessionService.create(sessionId, user.id);
+    return { sessionId, user: { id: user.id, email: user.email, role: user.role } };
+  }
+
+  async logout(sessionId: string): Promise<void> {
+    await this.sessionService.destroy(sessionId);
+  }
+
+  async validateSession(sessionId: string) {
+    const userId = await this.sessionService.getUserId(sessionId);
+    if (!userId) throw new UnauthorizedException('Invalid or expired session');
+    const user = await this.userService.findById(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+    return user;
+  }
+
+  async getUserIdBySessionId(sessionId: string): Promise<number | null> {
+  return this.sessionService.getUserId(sessionId); // ← возвращает number | null
+}
+}
+```
+### SessionGuard
+
+`src/auth/guards/session.guard.ts`:
 
 ```ts
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, Inject } from '@nestjs/common';
@@ -383,163 +469,157 @@ export class JwtAuthGuard implements CanActivate {
   }
 }
 ```
+> 💡 Guard проверяет наличие куки sessionId, ищет сессию в Redis и добавляет userId в req.session.
 
-### Шаг 4: AuthModule
-
-`src/auth/auth.service.ts`:
-
+### Auth Controller
+Пропишем dto для красивого отображения данных в сваггере и быстрой работы с данными, в частности в авторизации и регистрации.
+`src/auth/dto/login.dto.ts`:
 ```ts
-import { Inject, Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { Redis } from 'ioredis';
-import { UserService } from '../user/user.service';
-
-@Injectable()
-export class AuthService {
-  constructor(
-    private users: UserService,
-    private jwt: JwtService,
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
-  ) {}
-
-  async register({ email, password, name }: any) {
-    const user = await this.users.findByEmail(email);
-    if (user) throw new Error('User already exists');
-    return this.users.create({ email, password, name, role: 'user' });
-  }
-
-  async login({ email, password }: any) {
-    const user = await this.users.findByEmail(email);
-    if (!user || user.password !== password) throw new Error('Invalid credentials');
-    const payload = { email: user.email, sub: user.id, role: user.role };
-    return { access_token: this.jwt.sign(payload, { expiresIn: '1h' }) };
-  }
-
-  async logout(token: string) {
-    try {
-      const { exp } = this.jwt.decode(token) as any;
-      const ttl = exp - Math.floor(Date.now() / 1000);
-      if (ttl > 0) {
-        await this.redis.setex(`blacklist:${token}`, ttl, '1');
-      }
-    } catch (e) {
-      // ignore invalid tokens
-    }
-  }
-
-  async isTokenBlacklisted(token: string): Promise<boolean> {
-    const exists = await this.redis.exists(`blacklist:${token}`);
-    return exists === 1;
-  }
+import { ApiProperty } from '@nestjs/swagger';
+export class LoginDto {
+  @ApiProperty({ example: 'user@test.com' })
+  email: string;
+  @ApiProperty({ example: '123' })
+  password: string;
 }
 ```
-
-Добавим написанный JWTGuard, который будет требовать JWT для каждого метода, требующего авторизации, в контроллер.
+`src/auth/dto/register.dto.ts`:
+```ts
+import { ApiProperty } from '@nestjs/swagger';
+export class RegisterDto {
+  @ApiProperty({ example: 'user@test.com' })
+  email: string;
+  @ApiProperty({ example: '123' })
+  password: string;
+  @ApiProperty({ example: 'Test User', required: false })
+  name?: string;
+}
+```
+Используем dto в контроллере:
+`src/auth/auth.controller.ts`:
 
 ```ts
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Res, Req, UseGuards } from '@nestjs/common';
+import express from 'express';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
-@Controller('auth')
+@Controller('api/auth')
 export class AuthController {
-  constructor(private auth: AuthService) {}
+  constructor(private authService: AuthService) {}
 
   @Post('register')
-  register(@Body() dto: any) {
-    return this.auth.register(dto);
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto.email, dto.password, dto.name);
   }
 
   @Post('login')
-  login(@Body() dto: any) {
-    return this.auth.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: express.Response,
+  ) {
+    const { sessionId, user } = await this.authService.login(dto.email, dto.password);
+    res.cookie('sessionId', sessionId, {
+      httpOnly: true,
+      secure: false,
+      maxAge: 3600000,
+    });
+    return { user };
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  logout(@Req() req) {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (token) this.auth.logout(token);
-    return { ok: true };
+  async logout(@Req() req: express.Request, @Res() res: express.Response) {
+    const sessionId = req.cookies.sessionId;
+    if (sessionId) {
+      await this.authService.logout(sessionId);
+    }
+    res.clearCookie('sessionId');
+    return res.status(200).json({ ok: true });
   }
 }
 ```
 
-Организуем все в модуле, чтобы добавить функции с использованием авторизации в модуле Заявок.
+Организуем все в модуле Auth.
 
 ```ts
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
+import { SessionModule } from '../session/session.module'; // для Redis-сессий
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RedisModule } from 'src/redis/redis.module';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SessionGuard } from './guards/session.guard';
 
 @Module({
   imports: [
     UserModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'secret',
-      signOptions: { expiresIn: '1h' },
-    },
-  ),
-  RedisModule
+    SessionModule, 
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [
+    AuthService,
+    SessionGuard,
+  ],
+  exports: [
+    AuthService,
+    SessionGuard, 
+  ],
 })
 export class AuthModule {}
 ```
 
 ---
 
-## 9. Автоматическое заполнение автора заявки в модуле заявок
+## Контроллеры с авторизацией
 
-Создадим в `request.controller.ts` метод создания заявки с использованием авторизации (чтобы автоматически подставлять автора заявки):
+`request.controller.ts`:
 
 ```ts
 import {
   Controller,
+  Get,
   Post,
   Body,
-  Req,
   UseGuards,
-  UnauthorizedException,
+  Req,
+  Param,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { UserService } from '../user/user.service';
+import { Request } from '@nestjs/common';
 import { RequestService } from './request.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateRequestDto } from './dto/create-request.dto';
+import { SessionGuard } from '../auth/guards/session.guard';
 
-@Controller('requests')
+@Controller('api/requests')
 export class RequestController {
-  constructor(
-    private requestService: RequestService,
-    private userService: UserService,
-    private jwt: JwtService,
-  ) {}
+  constructor(private requestService: RequestService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard) // ← токен валиден и не в blacklist
-  async create(@Body() dto: any, @Req() req) {
-    // 1. Достаём токен из заголовка
-    const auth = req.headers.authorization;
-    const token = auth?.split(' ')[1];
-    if (!token) throw new UnauthorizedException();
+  @UseGuards(SessionGuard)
+  async create(@Body() dto: CreateRequestDto, @Req() req: Request & { session: { userId: number } }) {
+    // Автор берётся из сессии
+    return this.requestService.create(dto, req.session.userId);
+  }
 
-    // 2. Декодируем токен (без проверки — она уже прошла в guard'е)
-    const payload = this.jwt.decode(token) as { sub: number };
+  @Get()
+  @UseGuards(SessionGuard)
+  async findAll(@Req() req: Request & { session: { userId: number } }) {
+    return this.requestService.findAllByAuthor(req.session.userId);
+  }
 
-    // 3. Запрашиваем пользователя из БД 
-    const user = await this.userService.findOne(payload.sub);
-    if (!user) throw new UnauthorizedException('User not found');
-
-    // 4. Создаём заявку от этого пользователя
-    return this.requestService.create({
-      ...dto,
-      authorId: user.id,
-    });
+  @Get(':id')
+  @UseGuards(SessionGuard)
+  async findOne(@Param('id') id: string, @Req() req: Request & { session: { userId: number } }) {
+    const request = await this.requestService.findById(+id);
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    // Проверка: только свой или модератор (опционально)
+    if (request.authorId !== req.session.userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return request;
   }
 }
 ```
@@ -548,76 +628,166 @@ export class RequestController {
 
 ```ts
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Request } from './entities/request.entity';
-import { RequestController } from './request.controller';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { Request } from './request.model';
 import { RequestService } from './request.service';
-import { AuthModule } from 'src/auth/auth.module';
-import { JwtModule } from '@nestjs/jwt';
-import { RedisModule } from 'src/redis/redis.module';
-import { UserModule } from 'src/user/user.module';
+import { AuthModule } from '../auth/auth.module'; // если используется guard
+import { RequestController } from './request.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Request]), AuthModule, JwtModule.register({ // ← регистрация JwtModule
-      secret: process.env.JWT_SECRET || 'secret',
-      signOptions: { expiresIn: '1h' },
-    }), 
-    RedisModule,
-    UserModule
+  imports: [
+    SequelizeModule.forFeature([Request]), // ← обязательно!
+    AuthModule,
   ],
-  controllers: [RequestController],
   providers: [RequestService],
+  controllers: [RequestController],
+  exports: [RequestService],
 })
 export class RequestModule {}
 ```
-Не забудьте обновить импорты в `app.module.ts` (RedisModule, AuthModule, UserModule, RequestModule)!
+
+Вынесем все созданные модули в основной модуль app:
+```ts
+import { Module } from '@nestjs/common';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { AppController } from './app.controller';
+import { User } from './user/user.model';
+import { Request } from './request/request.model';
+import { UserModule } from './user/user.module';
+import { AuthModule } from './auth/auth.module';
+import { RequestModule } from './request/request.module';
+import { SessionModule } from './session/session.module';
+
+@Module({
+  imports: [
+    SequelizeModule.forRoot({
+      dialect: 'postgres',
+      port: 5435,
+      username: 'lab',
+      password: 'lab',
+      database: 'lab',
+      models: [User, Request],
+      autoLoadModels: true,
+      synchronize: true, // только для dev!
+    }),
+    UserModule,
+    AuthModule,
+    RequestModule,
+    SessionModule,
+  ],
+  controllers: [AppController],
+})
+export class AppModule {}
+```
 ---
 
-## 10. Настройка Swagger с securityDefinitions
+## Настройка Handlebars
 
-В `main.ts`:
-
-```ts
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  const config = new DocumentBuilder()
-    .setTitle('JWT Auth Lab')
-    .setDescription('API with JWT, Redis, PostgreSQL')
-    .setVersion('1.0')
-    .addSecurity('Bearer', {
-      type: 'apiKey',
-      name: 'Authorization',
-      in: 'header',
-      description: 'Enter JWT token with "Bearer " prefix',
-    })
-    .build();
-
-  const doc = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, doc);
-
-  await app.listen(3000);
-}
-bootstrap();
+Создадим две страницы - авторизацию и просмотр профиля, чтобы протестировать созданный апи в браузере.
+`views/login.hbs`:
+```hbs
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+</head>
+<body>
+  <h1>Вход</h1>
+  <form method="POST" action="/api/auth/login">
+    <label>Email:</label><br>
+    <input type="email" name="email" required><br><br>
+    <label>Password:</label><br>
+    <input type="password" name="password" required><br><br>
+    <button type="submit">Login</button>
+  </form>
+  <p><a href="/register">Регистрация</a></p>
+</body>
+</html>
+```
+`views/profile.hbs`:
+```hbs
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Profile</title>
+</head>
+<body>
+  <h1>Профиль</h1>
+  <p>Имя: {{ user.name }}</p>
+  <p>Email: {{ user.email }}</p>
+  <p>Роль: {{ user.role }}</p>
+  <form action="/api/auth/logout" method="POST">
+    <button type="submit">Выход</button>
+  </form>
+</body>
+</html>
 ```
 
+В `app.controller.ts` используем рендер этих двух страничек:
+
+```ts
+import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
+import express from 'express';
+import { ApiExcludeEndpoint } from '@nestjs/swagger';
+import { AuthService } from './auth/auth.service'; // ← импортируем сервис
+
+@Controller()
+export class AppController {
+  // 🔑 Внедряем AuthService через конструктор
+  constructor(private authService: AuthService) {}
+
+  @Get('/login')
+  @ApiExcludeEndpoint()
+  getLogin(@Req() req: express.Request) {
+    return { message: 'Please log in' };
+  }
+
+  @Get('/profile')
+  @ApiExcludeEndpoint()
+  async getProfile(@Req() req: express.Request, @Res() res: express.Response) {
+    const sessionId = req.cookies?.sessionId;
+    if (!sessionId) {
+      return res.redirect('/login');
+    }
+
+    try {
+      const user = await this.authService.validateSession(sessionId);
+      if (!user) {
+        return res.redirect('/login');
+      }
+
+      return res.render('profile', {
+        title: 'Profile',
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      });
+    } catch (err) {
+      return res.redirect('/login');
+    }
+  }
+}
+```
+Итоговая структура проекта:
+<img width="402" height="1328" alt="image" src="https://github.com/user-attachments/assets/46fdf1fc-dffe-4475-ad1c-c57a9466a426" />
+
+## Тестирование
+### 1. Swagger
 Зайдем на `http://localhost:3000/api` и посмотрим, что записалось в сваггере:
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/2eb42e0a-2055-49b5-bb7d-f58a51283ebd" />
+
 
 Все наши методы отразились в документации! Как тестировать? 
-- Нажми **Authorize** → введи `Bearer <ваш_токен>`
-  <img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/108ac36a-5f79-401f-8061-b898f04386d6" />
+- Нажми **Authorize** → введи в `value` свою куку, полученную при авторизации
+  <img width="1291" height="611" alt="image" src="https://github.com/user-attachments/assets/faedeed4-935e-48fc-a741-1e75036d14b5" />
 - Готово! Теперь можно тестировать методы, требующие авторизации :)
 
----
-
-## 11. Тестирование через Postman
-
-### Регистрация - `http://localhost:3000/auth/register`
+# Регистрация - `http://localhost:3000/auth/register`
+Структура тела запроса:
 ```json
 {
 "email":"user@test.com",
@@ -625,8 +795,8 @@ bootstrap();
 "name":"User"
 }
 ```
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/8ce527f2-3e29-4f6e-a17f-3d70aa689e24" />
-
+Попробуем зарегистрироваться и получим 201 с данными о регистрации:
+<img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/bb85494f-d662-472e-a779-670bca0c00fe" />
 
 ### Логин - `http://localhost:3000/auth/login`
 ```json
@@ -635,43 +805,64 @@ bootstrap();
 "password":"123",
 }
 ```
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/497ff93d-2c50-4e79-9a19-dfec3366acf3" />
-Сохраните токен и используйте его в следующих методах (пример заполнения заголовка на скриншоте)
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/345adf11-ff3e-4ae9-946a-9d1f410a8592" />
+### 2. Postman
+Залогинимся, предварительно открыв вкладку Сеть:
+<img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/697b1cef-a7ee-4b38-9e27-bb6dbe3baee7" />
+В Set-Cookie лежит заветная кука. Сохраните куку и используйте ее в следующих методах. Не потеряй ее и не сломай, как говорится.
+
+Потестируем в Postman домен заявок. Перейдем на вкладку Cookies (чуть ниже кнопки Send) и вставим ID сессии следующим образом, не меняя ничего остального:
+<img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/1765e094-cdc9-4053-b054-9f09a50ad23f" />
+
+Убедимся, что правильно оформили куку, выполнив GET запрос на домен заявок. Если ответ - 200, то, поздравляю, вы верно авторизовались.
+<img width="1356" height="720" alt="image" src="https://github.com/user-attachments/assets/8732fefe-136f-4741-8502-a76ad9870fdb" />
 
 
 ### Создание заявки
+Создадим заявку и убедимся, что автор будет заполняться автоматически. Пусть наша заявка имеет следующую структуру:
 ```json
 {
-"title": "meow"
+  "title": "Заявка на мемчик",
+  "description": "Хочу мемчик"
 }
 ```
-Получим всю информацию о заявке в ответе и заполненного автора:
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/8a0600a6-651e-4cde-abad-fbc48b23dde9" />
-
+После успешного создания получим всю информацию о заявке в ответе и заполненного автора:
+<img width="1345" height="1095" alt="image" src="https://github.com/user-attachments/assets/b1809e9e-c552-43f1-9450-1d6de048580b" />
 
 ### Выход из аккаунта
 Видим, что логаут прошел успешно.
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/8a5421cc-9137-4a74-b1cd-e992870af576" />
-Попробуем сделать что-нибудь по нашему токену и увидим, что токен в блэклисте и теперь мы не можем им воспользоваться.
-<img width="3072" height="1824" alt="изображение" src="https://github.com/user-attachments/assets/cddcbd62-77c3-4f37-a2e6-4f926a36fcab" />
+<img width="1369" height="827" alt="image" src="https://github.com/user-attachments/assets/180f27e4-2af4-4f82-8e09-5dd68249af7f" />
+
+Попробуем сделать что-нибудь и увидим 401 - наша кука больше не действительна.
+<img width="1359" height="926" alt="image" src="https://github.com/user-attachments/assets/73abc5fe-55bf-48bd-8b66-02def9818d3e" />
+### 3. Handlebars через браузер
+Залогинимся на странице `http://localhost:3000/login`:
+<img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/2bc7bef3-ac2e-4919-9476-9da2079aa16e" />
+После успешной авторизации страничка вернет нам json с нашими данными. Затем зайдем на страницу профиля `http://localhost:3000/profile` и увидим все о пользователе.
+<img width="3072" height="1824" alt="image" src="https://github.com/user-attachments/assets/b532ed03-69a1-43fe-876c-88a2f6de2c5b" />
+Попробуем выйти из аккаунта, нажав на кнопку "Выход". Все прошло успешно. Заметьте, что после логаута при попытке зайти на страницу профиля вас автоматически перебросит на страницу авторизации, что подтверждает, что мы все сделали верно.
 
 ---
 
-## 12. Заключение и полезные ссылки
+## Заключение
 
 Вы реализовали:
-- ✅ JWT-аутентификацию,
-- ✅ Хранение пользователей и заявок в PostgreSQL,
-- ✅ Отзыв токенов через Redis,
-- ✅ Ролевой доступ: `user` vs `moderator`,
-- ✅ Автоматическое заполнение `authorId`,
-- ✅ Swagger-документацию с безопасностью.
+
+  ✅ Сессионную аутентификацию через куки,  
+  ✅ Хранение данных в PostgreSQL (Sequelize),  
+  ✅ Хранение сессий в Redis,  
+  ✅ HTML-демо через Handlebars,  
+  ✅ JSON API с тестированием в Swagger,  
+  ✅ Ролевую модель и автоматическое заполнение authorId.
 
 ### Полезные ссылки
-- [JWT.io](https://jwt.io) — интерактивный декодер JWT
-- [RFC 7519 — спецификация JWT](https://datatracker.ietf.org/doc/html/rfc7519)
-- [NestJS Docs — Authentication](https://docs.nestjs.com/security/authentication)
+    NestJS Docs — Controllers
+    Sequelize + NestJS
+    OWASP: Session Management  
+    Express Session Best Practices
+
+- [NestJS Docs](https://docs.nestjs.com/](https://insayt.github.io/nestjs.ru.com/guide/first-steps.html)) — документация NestJS на русском
+- [OWASP: Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html?spm=a2ty_o01.29997173.0.0.65865171acRHgt)
+- [Express Session Best Practicesn](https://docs.nestjs.com/security/authentication](https://expressjs.com/en/resources/middleware/session.html?spm=a2ty_o01.29997173.0.0.65865171acRHgt))
 - [Swagger 2.0 Spec](https://swagger.io/specification/v2/)
 
-> 🎉 Поздравляем! Теперь вы умеете строить безопасные API с JWT и Redis!
+> 🎉 Поздравляем! Теперь вы умеете строить безопасные, stateful веб-приложения с сессиями, Redis и NestJS!
