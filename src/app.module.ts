@@ -1,26 +1,30 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from './auth/auth.module';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { AppController } from './app.controller';
+import { User } from './user/user.model';
+import { Request } from './request/request.model';
 import { UserModule } from './user/user.module';
+import { AuthModule } from './auth/auth.module';
 import { RequestModule } from './request/request.module';
-import { RedisModule } from './redis/redis.module';
+import { SessionModule } from './session/session.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
+    SequelizeModule.forRoot({
+      dialect: 'postgres',
+      port: 5435,
       username: 'lab',
       password: 'lab',
       database: 'lab',
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // only for dev!
+      models: [User, Request],
+      autoLoadModels: true,
+      synchronize: true, // только для dev!
     }),
-    RedisModule,
-    AuthModule,
     UserModule,
+    AuthModule,
     RequestModule,
+    SessionModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

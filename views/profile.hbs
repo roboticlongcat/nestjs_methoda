@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Profile</title>
+</head>
+<body>
+  <h1>Профиль</h1>
+  <p>Имя: {{ user.name }}</p>
+  <p>Email: {{ user.email }}</p>
+  <p>Роль: {{ user.role }}</p>
+  <form action="/api/auth/logout" method="POST">
+    <button type="submit">Выход</button>
+  </form>
+</body>
+</html>

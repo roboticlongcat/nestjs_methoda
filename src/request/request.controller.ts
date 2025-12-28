@@ -1,43 +1,47 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
-  Req,
   UseGuards,
-  UnauthorizedException,
+  Req,
+  Param,
+  NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { UserService } from '../user/user.service';
+import { Request } from '@nestjs/common';
 import { RequestService } from './request.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateRequestDto } from './dto/create-request.dto';
+import { SessionGuard } from '../auth/guards/session.guard';
 
-@Controller('requests')
+@Controller('api/requests')
 export class RequestController {
-  constructor(
-    private requestService: RequestService,
-    private userService: UserService,
-    private jwt: JwtService,
-  ) {}
+  constructor(private requestService: RequestService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard) // ← токен валиден и не в blacklist
-  async create(@Body() dto: any, @Req() req) {
-    // 1. Достаём токен из заголовка
-    const auth = req.headers.authorization;
-    const token = auth?.split(' ')[1];
-    if (!token) throw new UnauthorizedException();
+  @UseGuards(SessionGuard)
+  async create(@Body() dto: CreateRequestDto, @Req() req: Request & { session: { userId: number } }) {
+    // Автор берётся из сессии
+    return this.requestService.create(dto, req.session.userId);
+  }
 
-    // 2. Декодируем токен (без проверки — она уже прошла в guard'е)
-    const payload = this.jwt.decode(token) as { sub: number };
+  @Get()
+  @UseGuards(SessionGuard)
+  async findAll(@Req() req: Request & { session: { userId: number } }) {
+    return this.requestService.findAllByAuthor(req.session.userId);
+  }
 
-    // 3. Запрашиваем пользователя из БД 
-    const user = await this.userService.findOne(payload.sub);
-    if (!user) throw new UnauthorizedException('User not found');
-
-    // 4. Создаём заявку от этого пользователя
-    return this.requestService.create({
-      ...dto,
-      authorId: user.id,
-    });
+  @Get(':id')
+  @UseGuards(SessionGuard)
+  async findOne(@Param('id') id: string, @Req() req: Request & { session: { userId: number } }) {
+    const request = await this.requestService.findById(+id);
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    // Проверка: только свой или модератор (опционально)
+    if (request.authorId !== req.session.userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return request;
   }
 }

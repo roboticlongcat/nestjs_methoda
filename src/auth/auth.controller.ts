@@ -1,26 +1,39 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Res, Req, UseGuards } from '@nestjs/common';
+import express from 'express';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
-@Controller('auth')
+@Controller('api/auth')
 export class AuthController {
-  constructor(private auth: AuthService) {}
+  constructor(private authService: AuthService) {}
 
   @Post('register')
-  register(@Body() dto: any) {
-    return this.auth.register(dto);
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto.email, dto.password, dto.name);
   }
 
   @Post('login')
-  login(@Body() dto: any) {
-    return this.auth.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: express.Response,
+  ) {
+    const { sessionId, user } = await this.authService.login(dto.email, dto.password);
+    res.cookie('sessionId', sessionId, {
+      httpOnly: true,
+      secure: false,
+      maxAge: 3600000,
+    });
+    return { user };
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  logout(@Req() req) {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (token) this.auth.logout(token);
-    return { ok: true };
+  async logout(@Req() req: express.Request, @Res() res: express.Response) {
+    const sessionId = req.cookies.sessionId;
+    if (sessionId) {
+      await this.authService.logout(sessionId);
+    }
+    res.clearCookie('sessionId');
+    return res.status(200).json({ ok: true });
   }
 }

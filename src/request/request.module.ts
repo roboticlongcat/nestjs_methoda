@@ -1,22 +1,17 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Request } from './entities/request.entity';
-import { RequestController } from './request.controller';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { Request } from './request.model';
 import { RequestService } from './request.service';
-import { AuthModule } from 'src/auth/auth.module';
-import { JwtModule } from '@nestjs/jwt';
-import { RedisModule } from 'src/redis/redis.module';
-import { UserModule } from 'src/user/user.module';
+import { AuthModule } from '../auth/auth.module'; // если используется guard
+import { RequestController } from './request.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Request]), AuthModule, JwtModule.register({ // ← регистрация JwtModule
-      secret: process.env.JWT_SECRET || 'secret',
-      signOptions: { expiresIn: '1h' },
-    }), 
-    RedisModule,
-    UserModule
+  imports: [
+    SequelizeModule.forFeature([Request]), // ← обязательно!
+    AuthModule,
   ],
-  controllers: [RequestController],
   providers: [RequestService],
+  controllers: [RequestController],
+  exports: [RequestService],
 })
 export class RequestModule {}

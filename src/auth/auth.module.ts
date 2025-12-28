@@ -1,22 +1,23 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '../user/user.module';
+import { SessionModule } from '../session/session.module'; // для Redis-сессий
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { RedisModule } from 'src/redis/redis.module';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SessionGuard } from './guards/session.guard';
 
 @Module({
   imports: [
     UserModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'secret',
-      signOptions: { expiresIn: '1h' },
-    },
-  ),
-  RedisModule
+    SessionModule, 
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
+  providers: [
+    AuthService,
+    SessionGuard,
+  ],
+  exports: [
+    AuthService,
+    SessionGuard, 
+  ],
 })
 export class AuthModule {}

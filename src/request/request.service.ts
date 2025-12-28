@@ -1,36 +1,40 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Request } from './entities/request.entity';
+import { InjectModel } from '@nestjs/sequelize';
+import { Request } from './request.model';
 
 @Injectable()
 export class RequestService {
   constructor(
-    @InjectRepository(Request)
-    private repo: Repository<Request>,
+    @InjectModel(Request)
+    private requestModel: typeof Request,
   ) {}
 
-  create(dto: any) {
-    return this.repo.save(dto);
+  /* Создать заявку */
+  async create(createDto: any, authorId: number) {
+    return this.requestModel.create({
+      ...createDto,
+      authorId,
+    });
   }
 
-  findAll() {
-    return this.repo.find();
+  /* Получить ВСЕ заявки пользователя */
+  async findAllByAuthor(authorId: number) {
+    return this.requestModel.findAll({ where: { authorId } });
   }
 
-  findAllByAuthor(authorId: number) {
-    return this.repo.find({ where: { authorId } });
+  /* Получить все заявки */
+  async findAll() {
+    return this.requestModel.findAll();
   }
 
-  findOne(id: number) {
-    return this.repo.findOne({ where: { id } });
+  /* Найти одну заявку по ID */
+  async findById(id: number) {
+    return this.requestModel.findByPk(id);
   }
 
-  remove(id: number) {
-    return this.repo.delete(id);
-  }
-
-  update(id: number, dto: any) {
-    return this.repo.update(id, dto);
+  /* Проверить, принадлежит ли заявка пользователю */
+  async isOwner(requestId: number, userId: number): Promise<boolean> {
+    const request = await this.requestModel.findByPk(requestId);
+    return !!request && request.authorId === userId;
   }
 }
