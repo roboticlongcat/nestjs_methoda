@@ -17,7 +17,7 @@
 - [Зачем нужен Redis при использовании сессий?](#зачем-нужен-redis-при-использовании-сессий)
 - [Подготовка окружения](#подготовка-окружения)
 - [Создание проекта NestJS](#создание-проекта-nestjs)
-- [Настройка Sequalize и Handlebars](#настройка-sequalize-и-handlebars)
+- [Настройка Sequelize и Handlebars](#настройка-sequelize-и-handlebars)
 - [Реализация моделей User и Request](#реализация-моделей-user-и-request)
 - [Аутентификация: сервис, контроллер, guard](#аутентификация-сервис-контроллер-guard)
 - [Контроллеры с авторизацией](#контроллеры-с-авторизацией)
@@ -116,7 +116,7 @@ npm install -D @types/express @types/cookie-parser
 ```
 ---
 
-## Настройка Sequalize и Handlebars
+## Настройка Sequelize и Handlebars
 
 В `main.ts` пропишем пути к папке с файлами handlebars и настроим сваггер:
 
